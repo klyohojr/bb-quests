@@ -1,18 +1,24 @@
+// /api/xp-from-chat.js — secure bridge I can call from chat
+// Call like: /api/xp-from-chat?secret=YOUR_CHAT_SECRET&amount=25
 export default async function handler(req, res) {
-  const { secret, amount } = req.query;
+  const secret = (req.query.secret || '').trim();
+  const amount = Number(req.query.amount || 0);
 
-  // Only allow if secret matches
-  if (secret !== process.env.CHAT_SECRET) {
+  if (!secret || secret !== process.env.CHAT_SECRET)
     return res.status(403).json({ error: 'Unauthorized' });
-  }
+  if (!amount || !Number.isFinite(amount))
+    return res.status(400).json({ error: 'Bad amount' });
 
-  try {
-    const bump = await fetch(
-      `${process.env.SITE_URL}/api/xp-bump?user=kenny&add=${amount}&token=${process.env.WRITE_TOKEN}`
-    );
-    const data = await bump.json();
-    res.status(200).json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  // Build your own base URL (no SITE_URL env needed)
+  const base =
+    (req.headers['x-forwarded-proto'] || 'https') + '://' + req.headers.host;
+
+  // Call the internal xp-bump using your WRITE_TOKEN (kept server-side)
+  const r = await fetch(
+    `${base}/api/xp-bump?user=kenny&add=${amount}&token=${encodeURIComponent(
+      process.env.WRITE_TOKEN || ''
+    )}`
+  );
+  const j = await r.json();
+  return res.status(r.status).json(j);
 }
