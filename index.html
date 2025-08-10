@@ -12,7 +12,7 @@
     main { max-width:720px; margin:0 auto; padding:16px; display:grid; gap:12px; }
     .card { background:var(--card); border:1px solid #242b3f; border-radius:14px; padding:12px; }
     .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    input,select { flex:1; min-width:140px; background:#0e1220; color:var(--ink); border:1px solid #2a3150; border-radius:12px; padding:10px; }
+    input { flex:1; min-width:140px; background:#0e1220; color:var(--ink); border:1px solid #2a3150; border-radius:12px; padding:10px; }
     button { background:linear-gradient(180deg,#ffe56b,#ffd400); color:#111; font-weight:800; border:0; border-radius:12px; padding:10px 12px; }
     .ghost { background:#0e1220; color:var(--ink); border:1px solid #2a3150; }
     .muted { color:var(--muted); font-size:12px; }
@@ -44,11 +44,17 @@
 <script>
 const apiBase = location.origin;
 
+document.getElementById('user').value = localStorage.getItem('bb_user') || 'kenny';
+document.getElementById('user').addEventListener('change', e=>{
+  localStorage.setItem('bb_user', e.target.value.trim());
+});
+
 async function addQuest(titleArg){
   const user = getUser();
   const title = titleArg || document.getElementById('title').value.trim();
   const due = document.getElementById('due').value || new Date().toISOString().slice(0,10);
   if(!title) return alert('Give the quest a title');
+
   const r = await fetch(`${apiBase}/api/quests?user=${encodeURIComponent(user)}`,{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ title, due })
@@ -56,6 +62,7 @@ async function addQuest(titleArg){
   const j = await r.json();
   if(!j.ok){ alert('Save failed'); return; }
   document.getElementById('title').value='';
+  renderStats(j.stats);
   refresh();
 }
 
@@ -83,7 +90,7 @@ async function snooze(id, which){
   const user = getUser();
   const r = await fetch(`${apiBase}/api/quests?user=${encodeURIComponent(user)}`,{
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ id, snooze: which }) // 'tonight' or 'tomorrow'
+    body: JSON.stringify({ id, snooze: which })
   });
   const j = await r.json();
   if(!j.ok){ alert('Snooze failed'); return; }
@@ -91,10 +98,9 @@ async function snooze(id, which){
 }
 
 async function chaos(){
-  const r = await fetch(`${apiBase}/api/chaos`);
-  const drop = await r.json();
-  await addQuest(drop.title);
-  alert(`Chaos drop added: ${drop.title} (+${drop.xp} XP on completion)`);
+  const user = getUser();
+  await fetch(`${apiBase}/api/chaos-add?user=${encodeURIComponent(user)}`); // auto-add a random drop
+  refresh();
 }
 
 function renderList(list){
@@ -120,7 +126,6 @@ function renderStats(s){ document.getElementById('stats').innerHTML = `
 
 function getUser(){ return (document.getElementById('user').value.trim() || 'kenny'); }
 
-// auto-load
 refresh();
 </script>
 </body>
