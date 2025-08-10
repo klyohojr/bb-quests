@@ -1,4 +1,4 @@
-// /api/chaos.js — returns a random micro-quest with suggested XP
+// Returns a random micro-quest with suggested XP
 const DROPS = [
   { title:'Send a ridiculous meme to an old friend', xp:8 },
   { title:'No-spend hour: dodge every impulse', xp:9 },
