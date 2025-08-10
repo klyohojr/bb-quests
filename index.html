@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     :root { --bg:#0b0b0f; --card:#141827; --ink:#f7f8ff; --muted:#a6adbb; --accent:#ffd400; }
-    body { margin:0; font-family: -apple-system, Inter, system-ui, Arial; background: var(--bg); color: var(--ink); }
+    body { margin:0; font-family:-apple-system,Inter,system-ui,Arial; background:var(--bg); color:var(--ink); }
     header { position:sticky; top:0; padding:14px 16px; background:#0b0b0fcc; backdrop-filter: blur(8px); border-bottom:1px solid #1f2538; }
     h1 { margin:0; font-size:18px; }
     main { max-width:720px; margin:0 auto; padding:16px; display:grid; gap:12px; }
@@ -32,19 +32,21 @@
       <input id="user" placeholder="Your ID (e.g., kenny)"/>
       <button onclick="addQuest()">Add Quest</button>
       <button class="ghost" onclick="refresh()">Refresh</button>
+      <button class="ghost" onclick="chaos()">Chaos Drop</button>
     </div>
-    <div class="muted">Tip: set your ID once; I’ll use the same ID when I sync/remind you.</div>
+    <div class="muted">Tip: set your ID once; I’ll use it for reminders & XP.</div>
   </section>
 
+  <section id="stats" class="card"></section>
   <section id="list" class="card"></section>
 </main>
 
 <script>
-const apiBase = location.origin; // same domain as deploy
+const apiBase = location.origin;
 
-async function addQuest(){
-  const user = document.getElementById('user').value.trim() || 'kenny';
-  const title = document.getElementById('title').value.trim();
+async function addQuest(titleArg){
+  const user = getUser();
+  const title = titleArg || document.getElementById('title').value.trim();
   const due = document.getElementById('due').value || new Date().toISOString().slice(0,10);
   if(!title) return alert('Give the quest a title');
   const r = await fetch(`${apiBase}/api/quests?user=${encodeURIComponent(user)}`,{
@@ -58,34 +60,65 @@ async function addQuest(){
 }
 
 async function refresh(){
-  const user = document.getElementById('user').value.trim() || 'kenny';
+  const user = getUser();
   const r = await fetch(`${apiBase}/api/quests?user=${encodeURIComponent(user)}`);
   const j = await r.json();
-  render(j.quests||[]);
+  renderStats(j.stats||{xp:0,streak:0});
+  renderList(j.quests||[]);
 }
 
 async function toggleDone(id, done){
-  const user = document.getElementById('user').value.trim() || 'kenny';
+  const user = getUser();
   const r = await fetch(`${apiBase}/api/quests?user=${encodeURIComponent(user)}`,{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ id, done })
   });
   const j = await r.json();
   if(!j.ok){ alert('Update failed'); return; }
+  renderStats(j.stats);
   refresh();
 }
 
-function render(list){
+async function snooze(id, which){
+  const user = getUser();
+  const r = await fetch(`${apiBase}/api/quests?user=${encodeURIComponent(user)}`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id, snooze: which }) // 'tonight' or 'tomorrow'
+  });
+  const j = await r.json();
+  if(!j.ok){ alert('Snooze failed'); return; }
+  refresh();
+}
+
+async function chaos(){
+  const r = await fetch(`${apiBase}/api/chaos`);
+  const drop = await r.json();
+  await addQuest(drop.title);
+  alert(`Chaos drop added: ${drop.title} (+${drop.xp} XP on completion)`);
+}
+
+function renderList(list){
   const box = document.getElementById('list');
   if(!list.length){ box.innerHTML='<div class="muted">No quests yet.</div>'; return; }
-  box.innerHTML = list.sort((a,b)=> (a.done?1:0)-(b.done?1:0) || a.due.localeCompare(b.due))
+  box.innerHTML = list
+    .sort((a,b)=> (a.done?1:0)-(b.done?1:0) || a.due.localeCompare(b.due))
     .map(q=>`<div class="item">
       <div><strong>${q.title}</strong></div>
-      <div class="row"><span class="tag">${q.due}${q.done?' • done':''}</span>
-        <button class="ghost" onclick="toggleDone('${q.id}', ${!q.done})">${q.done?'Mark Undone':'Mark Done'}</button>
+      <div class="row">
+        <span class="tag">${q.due}${q.done?' • done':''}</span>
+        <button class="ghost" onclick="snooze('${q.id}','tonight')">Snooze tonight</button>
+        <button class="ghost" onclick="snooze('${q.id}','tomorrow')">Snooze tomorrow</button>
+        <button onclick="toggleDone('${q.id}', ${!q.done})">${q.done?'Mark Undone':'Mark Done'}</button>
       </div>
     </div>`).join('');
 }
+
+function renderStats(s){ document.getElementById('stats').innerHTML = `
+  <div><strong>XP:</strong> ${s.xp||0} • <strong>Streak:</strong> ${s.streak||0}</div>
+  <div class="muted">Complete any quest to gain XP (+10) and keep your daily streak alive.</div>
+`; }
+
+function getUser(){ return (document.getElementById('user').value.trim() || 'kenny'); }
 
 // auto-load
 refresh();
